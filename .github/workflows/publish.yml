@@ -57,6 +57,16 @@ jobs:
         id: astro
         run: echo "version=$(node ./scripts/print-astro-version.mjs)" >> "$GITHUB_OUTPUT"
 
+      - name: Compute image tags
+        if: steps.publish_guard.outputs.should_publish == 'true'
+        id: image_tags
+        run: |
+          node ./scripts/print-image-tags.mjs \
+            --image "ghcr.io/${{ github.repository_owner }}/docker-astro-lint" \
+            --variant "${{ matrix.variant }}" \
+            --version "${{ steps.astro.outputs.version }}" \
+            --output "${GITHUB_OUTPUT}"
+
       - name: Install fixture dependencies
         if: steps.publish_guard.outputs.should_publish == 'true'
         working-directory: fixtures/test-site
@@ -96,7 +106,7 @@ jobs:
           push: true
           build-args: |
             LYCHEE_VERSION=${{ matrix.lychee_version }}
-          tags: ghcr.io/${{ github.repository_owner }}/docker-astro-lint:${{ steps.astro.outputs.version }}-${{ matrix.variant }}
+          tags: ${{ steps.image_tags.outputs.tags }}
 
       - name: Skip publish when Astro and recipe inputs did not change
         if: steps.publish_guard.outputs.should_publish != 'true'

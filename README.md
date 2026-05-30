@@ -19,8 +19,16 @@ The image ships pinned versions of:
 
 Images are published to GHCR with tags derived from the pinned Astro version:
 
-- `ghcr.io/<owner>/docker-astro-lint:<astro-version>-slim`
-- `ghcr.io/<owner>/docker-astro-lint:<astro-version>-alpine`
+- Debian slim is the default image family:
+  - `ghcr.io/<owner>/docker-astro-lint:<astro-version>`
+  - `ghcr.io/<owner>/docker-astro-lint:<astro-major>.<astro-minor>`
+  - `ghcr.io/<owner>/docker-astro-lint:<astro-major>`
+  - `ghcr.io/<owner>/docker-astro-lint:latest`
+- Alpine keeps an explicit suffix:
+  - `ghcr.io/<owner>/docker-astro-lint:<astro-version>-alpine`
+  - `ghcr.io/<owner>/docker-astro-lint:<astro-major>.<astro-minor>-alpine`
+  - `ghcr.io/<owner>/docker-astro-lint:<astro-major>-alpine`
+  - `ghcr.io/<owner>/docker-astro-lint:latest-alpine`
 
 This image family currently targets `node:24` and Linux `amd64`.
 
@@ -60,7 +68,7 @@ Mount an Astro project into `/workspace` and invoke the desired CLI directly:
 docker run --rm -it \
   --user "$(id -u):$(id -g)" \
   -v "$PWD:/workspace" \
-  ghcr.io/<owner>/docker-astro-lint:<astro-version>-slim \
+  ghcr.io/<owner>/docker-astro-lint:<astro-version> \
   prettier-astro --check src/**/*.astro
 ```
 
