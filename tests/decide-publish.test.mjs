@@ -69,6 +69,19 @@ function createRepo() {
   return { baseRef, repoRoot };
 }
 
+function createEmptyRepo() {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "decide-publish-empty-"));
+
+  runGit(repoRoot, ["init", "--initial-branch=main"]);
+  runGit(repoRoot, ["config", "user.name", "Codex"]);
+  runGit(repoRoot, ["config", "user.email", "codex@example.com"]);
+
+  writeRepoFile(repoRoot, "README.md", "# bootstrap\n");
+  const baseRef = commitAll(repoRoot, "bootstrap");
+
+  return { baseRef, repoRoot };
+}
+
 test("publishes when a manual dispatch requests it", () => {
   const result = decidePublish({
     beforeRef: "",
@@ -99,6 +112,45 @@ test("publishes when the Astro version changed in any commit in the push", () =>
   assert.equal(result.reason, "astro-version-changed");
   assert.equal(result.previousVersion, "1.0.0");
   assert.equal(result.currentVersion, "2.0.0");
+});
+
+test("publishes when the previous revision predates the tool manifest", () => {
+  const { baseRef, repoRoot } = createEmptyRepo();
+
+  updatePinnedAstroVersion(repoRoot, "1.0.0");
+  writeRepoFile(repoRoot, "package-lock.json", "{\n}\n");
+  writeRepoFile(repoRoot, "fixtures/test-site/package-lock.json", "{\n}\n");
+  writeRepoFile(repoRoot, "Dockerfile.slim", "FROM node:24-slim\n");
+  writeRepoFile(repoRoot, "Dockerfile.alpine", "FROM node:24-alpine\n");
+  writeRepoFile(repoRoot, "scripts/smoke-test-image.sh", "#!/bin/sh\nexit 0\n");
+  writeRepoFile(
+    repoRoot,
+    ".github/workflows/publish.yml",
+    "lychee_version: 0.24.2\n",
+  );
+  const headRef = commitAll(repoRoot, "add publish inputs");
+
+  const result = decidePublish({
+    beforeRef: baseRef,
+    eventName: "push",
+    headRef,
+    repoRoot,
+  });
+
+  assert.equal(result.shouldPublish, true);
+  assert.equal(result.reason, "recipe-changed");
+  assert.equal(result.currentVersion, "1.0.0");
+  assert.equal(result.previousVersion, null);
+  assert.deepEqual(result.changedInputs, [
+    ".github/workflows/publish.yml",
+    "Dockerfile.alpine",
+    "Dockerfile.slim",
+    "fixtures/test-site/package-lock.json",
+    "fixtures/test-site/package.json",
+    "package-lock.json",
+    "package.json",
+    "scripts/smoke-test-image.sh",
+  ]);
 });
 
 test("publishes when a Dockerfile changed without an Astro version bump", () => {

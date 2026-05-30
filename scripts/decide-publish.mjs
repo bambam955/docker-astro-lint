@@ -19,6 +19,8 @@ function runGit(args, { repoRoot, allowFailure = false } = {}) {
     return execFileSync("git", args, {
       cwd: repoRoot,
       encoding: "utf8",
+      // Keep expected probe failures out of the workflow logs.
+      stdio: ["ignore", "pipe", "pipe"],
     }).trimEnd();
   } catch (error) {
     if (allowFailure) {
@@ -40,7 +42,23 @@ function hasCommit({ repoRoot, revision }) {
   }) !== null;
 }
 
-function readPinnedAstroVersion({ repoRoot, revision }) {
+function hasFileAtRevision({ repoRoot, revision, filePath }) {
+  return runGit(["cat-file", "-e", `${revision}:${filePath}`], {
+    repoRoot,
+    allowFailure: true,
+  }) !== null;
+}
+
+function readPinnedAstroVersion({ repoRoot, revision, allowMissing = false }) {
+  // Older revisions can predate the tool manifest entirely. Treat that as
+  // "no previous pinned version" so the caller can fall back to path diffs.
+  if (
+    allowMissing &&
+    !hasFileAtRevision({ filePath: "package.json", repoRoot, revision })
+  ) {
+    return null;
+  }
+
   const packageJson = JSON.parse(
     runGit(["show", `${revision}:package.json`], { repoRoot }),
   );
@@ -94,9 +112,13 @@ export function decidePublish({
   }
 
   const currentVersion = readPinnedAstroVersion({ repoRoot, revision: headRef });
-  const previousVersion = readPinnedAstroVersion({ repoRoot, revision: beforeRef });
+  const previousVersion = readPinnedAstroVersion({
+    allowMissing: true,
+    repoRoot,
+    revision: beforeRef,
+  });
 
-  if (currentVersion !== previousVersion) {
+  if (previousVersion && currentVersion !== previousVersion) {
     return {
       changedInputs: [],
       currentVersion,
