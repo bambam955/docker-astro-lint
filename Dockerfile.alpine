@@ -1,0 +1,48 @@
+FROM node:24-alpine
+
+ARG LYCHEE_VERSION=0.24.2
+
+ENV TOOL_HOME=/opt/docker-astro-lint
+ENV PATH="${TOOL_HOME}/node_modules/.bin:${PATH}"
+ENV ASTRO_TELEMETRY_DISABLED=1
+
+RUN apk add --no-cache ca-certificates curl tar
+
+WORKDIR ${TOOL_HOME}
+
+COPY package.json package-lock.json ./
+
+# Keep the JavaScript tools in a dedicated directory so the runtime image can
+# expose them without depending on the mounted project layout.
+RUN npm ci --omit=dev \
+  && npm cache clean --force
+
+# Mounted projects cannot rely on Prettier discovering plugins from the image,
+# so expose a small wrapper that always points at the bundled Astro plugin.
+RUN printf '%s\n' '#!/bin/sh' 'exec prettier --plugin=/opt/docker-astro-lint/node_modules/prettier-plugin-astro/dist/index.js "$@"' > /usr/local/bin/prettier-astro \
+  && chmod +x /usr/local/bin/prettier-astro
+
+RUN set -eux; \
+  arch="$(apk --print-arch)"; \
+  if [ "${arch}" != "x86_64" ]; then \
+    echo "Unsupported architecture: ${arch}" >&2; \
+    exit 1; \
+  fi; \
+  mkdir -p /tmp/lychee; \
+  curl -fsSLO "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-x86_64-unknown-linux-musl.tar.gz"; \
+  tar -xzf lychee-x86_64-unknown-linux-musl.tar.gz -C /tmp/lychee; \
+  cp /tmp/lychee/lychee-x86_64-unknown-linux-musl/lychee /usr/local/bin/lychee; \
+  chmod +x /usr/local/bin/lychee; \
+  rm -rf /tmp/lychee lychee-x86_64-unknown-linux-musl.tar.gz
+
+# The default runtime user should be non-root because the image is expected to
+# run against arbitrary mounted repositories in CI.
+RUN addgroup -g 10001 astro \
+  && adduser -D -u 10001 -G astro -h /home/astro astro \
+  && mkdir -p /workspace \
+  && chown astro:astro /workspace
+
+USER astro
+WORKDIR /workspace
+
+CMD ["/bin/sh"]

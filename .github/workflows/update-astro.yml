@@ -1,0 +1,63 @@
+name: update-astro
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-astro:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Update pinned Astro version
+        run: node ./scripts/update-astro-version.mjs
+
+      - name: Detect manifest changes
+        id: changes
+        run: |
+          if git diff --quiet -- package.json fixtures/test-site/package.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Refresh root lockfile
+        if: steps.changes.outputs.changed == 'true'
+        run: npm install --package-lock-only
+
+      - name: Refresh fixture lockfile
+        if: steps.changes.outputs.changed == 'true'
+        working-directory: fixtures/test-site
+        run: npm install --package-lock-only
+
+      - name: Read pinned Astro version
+        if: steps.changes.outputs.changed == 'true'
+        id: astro
+        run: echo "version=$(node ./scripts/print-astro-version.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Create update pull request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/update-astro
+          commit-message: "chore: update Astro to v${{ steps.astro.outputs.version }}"
+          title: "chore: update Astro to v${{ steps.astro.outputs.version }}"
+          body: |
+            ## Summary
+
+            - bump the pinned Astro version in the image tool manifest
+            - refresh the fixture project to match the new Astro version
+            - regenerate the lockfiles used by the image build and smoke tests

@@ -1,0 +1,5 @@
+.git
+.github
+node_modules
+fixtures/test-site/node_modules
+npm-debug.log*

@@ -1,0 +1,17 @@
+{
+  "name": "docker-astro-lint",
+  "private": true,
+  "description": "Pinned tool manifest for the Astro static analysis image.",
+  "scripts": {
+    "astro:version": "node ./scripts/print-astro-version.mjs",
+    "update:astro": "node ./scripts/update-astro-version.mjs"
+  },
+  "dependencies": {
+    "@astrojs/check": "0.9.9",
+    "astro": "6.4.2",
+    "eslint": "10.4.1",
+    "markdownlint-cli2": "0.22.1",
+    "prettier": "3.8.3",
+    "prettier-plugin-astro": "0.14.1"
+  }
+}
