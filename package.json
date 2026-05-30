@@ -4,6 +4,7 @@
   "description": "Pinned tool manifest for the Astro static analysis image.",
   "scripts": {
     "astro:version": "node ./scripts/print-astro-version.mjs",
+    "test": "node --test",
     "update:astro": "node ./scripts/update-astro-version.mjs"
   },
   "dependencies": {

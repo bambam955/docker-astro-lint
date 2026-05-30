@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "package-lock.json"
-      - "package.json"
-      - "fixtures/test-site/package-lock.json"
-      - "fixtures/test-site/package.json"
   workflow_dispatch:
 
 permissions:
@@ -33,37 +28,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          # The publish guard compares the pinned Astro version to the previous
-          # commit so versioned tags are not silently overwritten.
-          fetch-depth: 2
+          # The publish guard compares the pushed HEAD against the branch tip
+          # from before the push, so it needs the full history for that range.
+          fetch-depth: 0
 
       - name: Decide whether this run should publish
         id: publish_guard
         shell: bash
         run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if ! git rev-parse HEAD^ >/dev/null 2>&1; then
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          current_version="$(
-            python3 -c 'import json, pathlib; print(json.loads(pathlib.Path("package.json").read_text())["dependencies"]["astro"])'
-          )"
-          previous_version="$(
-            git show HEAD^:package.json \
-              | python3 -c 'import json, sys; print(json.load(sys.stdin)["dependencies"]["astro"])'
-          )"
-
-          if [[ "${current_version}" == "${previous_version}" ]]; then
-            echo "should_publish=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-          fi
+          node ./scripts/decide-publish.mjs \
+            --event "${GITHUB_EVENT_NAME}" \
+            --before "${{ github.event.before }}" \
+            --head "${GITHUB_SHA}" \
+            --output "${GITHUB_OUTPUT}"
 
       - name: Set up Node.js
         if: steps.publish_guard.outputs.should_publish == 'true'
@@ -121,6 +98,6 @@ jobs:
             LYCHEE_VERSION=${{ matrix.lychee_version }}
           tags: ghcr.io/${{ github.repository_owner }}/docker-astro-lint:${{ steps.astro.outputs.version }}-${{ matrix.variant }}
 
-      - name: Skip publish when Astro did not change
+      - name: Skip publish when Astro and recipe inputs did not change
         if: steps.publish_guard.outputs.should_publish != 'true'
-        run: echo "Pinned Astro version did not change; skipping publish."
+        run: echo "Pinned Astro version and recipe inputs did not change; skipping publish."
