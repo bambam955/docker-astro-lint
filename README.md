@@ -34,6 +34,10 @@ This image family currently targets `node:24` and Linux `amd64`.
 
 ## Local build
 
+Both the local recipes and the publish workflow build through
+[`docker buildx bake`](https://docs.docker.com/build/bake/) so the Dockerfile
+selection, shared build args, and image tagging rules stay in one place.
+
 The easiest local workflow is through `just`:
 
 ```bash
@@ -44,7 +48,7 @@ just smoke alpine
 ```
 
 The recipes default to the `slim` variant. Pass `alpine` as the positional
-variant argument to use the other Dockerfile.
+variant argument to use the other bake target.
 
 If you want to run the steps manually, install the pinned tool manifest and the
 fixture dependencies first:
@@ -52,6 +56,12 @@ fixture dependencies first:
 ```bash
 npm ci
 cd fixtures/test-site && npm ci
+```
+
+Build a local image directly with bake:
+
+```bash
+ASTRO_VERSION="$(node ./scripts/print-astro-version.mjs)" docker buildx bake slim --load
 ```
 
 Run the smoke test against a built image:

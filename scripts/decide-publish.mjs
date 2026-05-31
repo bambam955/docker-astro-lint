@@ -7,6 +7,7 @@ export const publishInputPaths = [
   ".github/workflows/publish.yml",
   "Dockerfile.alpine",
   "Dockerfile.slim",
+  "docker-bake.hcl",
   "fixtures/test-site/package-lock.json",
   "fixtures/test-site/package.json",
   "package-lock.json",

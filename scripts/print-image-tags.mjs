@@ -54,10 +54,27 @@ function writeOutputs({ outputPath, tags }) {
   appendFileSync(outputPath, `${lines.join("\n")}\n`);
 }
 
+export function formatTags({ format, tags }) {
+  if (format === "csv") {
+    // Bake accepts comma-delimited tag overrides, so keep that translation in
+    // one place instead of rebuilding it inline in the workflow shell.
+    return tags.join(",");
+  }
+
+  if (format === "lines") {
+    return tags.join("\n");
+  }
+
+  throw new Error(`Unsupported output format "${format}".`);
+}
+
 function main() {
   const { values } = parseArgs({
     args: process.argv.slice(2),
     options: {
+      format: {
+        type: "string",
+      },
       image: {
         type: "string",
       },
@@ -96,7 +113,8 @@ function main() {
     return;
   }
 
-  process.stdout.write(`${tags.join("\n")}\n`);
+  const format = values.format ?? "lines";
+  process.stdout.write(`${formatTags({ format, tags })}\n`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

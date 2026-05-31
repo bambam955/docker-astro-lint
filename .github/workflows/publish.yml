@@ -16,13 +16,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - variant: slim
-            dockerfile: Dockerfile.slim
-            lychee_version: 0.24.2
-          - variant: alpine
-            dockerfile: Dockerfile.alpine
-            lychee_version: 0.24.2
+        variant:
+          - slim
+          - alpine
 
     steps:
       - name: Check out repository
@@ -57,16 +53,6 @@ jobs:
         id: astro
         run: echo "version=$(node ./scripts/print-astro-version.mjs)" >> "$GITHUB_OUTPUT"
 
-      - name: Compute image tags
-        if: steps.publish_guard.outputs.should_publish == 'true'
-        id: image_tags
-        run: |
-          node ./scripts/print-image-tags.mjs \
-            --image "ghcr.io/${{ github.repository_owner }}/docker-astro-lint" \
-            --variant "${{ matrix.variant }}" \
-            --version "${{ steps.astro.outputs.version }}" \
-            --output "${GITHUB_OUTPUT}"
-
       - name: Install fixture dependencies
         if: steps.publish_guard.outputs.should_publish == 'true'
         working-directory: fixtures/test-site
@@ -86,12 +72,12 @@ jobs:
 
       - name: Build local validation image
         if: steps.publish_guard.outputs.should_publish == 'true'
+        env:
+          ASTRO_VERSION: ${{ steps.astro.outputs.version }}
         run: |
-          docker build \
-            -f "${{ matrix.dockerfile }}" \
-            --build-arg LYCHEE_VERSION="${{ matrix.lychee_version }}" \
-            -t "docker-astro-lint:${{ steps.astro.outputs.version }}-${{ matrix.variant }}" \
-            .
+          # Load the image into the Docker engine so the smoke test can run the
+          # exact artifact definition that the publish step will push.
+          docker buildx bake "${{ matrix.variant }}" --load
 
       - name: Smoke test image
         if: steps.publish_guard.outputs.should_publish == 'true'
@@ -99,14 +85,18 @@ jobs:
 
       - name: Build and push image
         if: steps.publish_guard.outputs.should_publish == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          push: true
-          build-args: |
-            LYCHEE_VERSION=${{ matrix.lychee_version }}
-          tags: ${{ steps.image_tags.outputs.tags }}
+        env:
+          ASTRO_VERSION: ${{ steps.astro.outputs.version }}
+          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/docker-astro-lint
+        run: |
+          publish_tags="$(node ./scripts/print-image-tags.mjs \
+            --format csv \
+            --image "$IMAGE_NAME" \
+            --variant "${{ matrix.variant }}" \
+            --version "$ASTRO_VERSION")"
+          docker buildx bake "${{ matrix.variant }}" \
+            --push \
+            --set "${{ matrix.variant }}.tags=${publish_tags}"
 
       - name: Skip publish when Astro and recipe inputs did not change
         if: steps.publish_guard.outputs.should_publish != 'true'

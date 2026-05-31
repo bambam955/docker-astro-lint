@@ -56,6 +56,7 @@ function createRepo() {
   writeRepoFile(repoRoot, "fixtures/test-site/package-lock.json", "{\n}\n");
   writeRepoFile(repoRoot, "Dockerfile.slim", "FROM node:24-slim\n");
   writeRepoFile(repoRoot, "Dockerfile.alpine", "FROM node:24-alpine\n");
+  writeRepoFile(repoRoot, "docker-bake.hcl", "group \"default\" {\n  targets = [\"slim\"]\n}\n");
   writeRepoFile(repoRoot, "scripts/smoke-test-image.sh", "#!/bin/sh\nexit 0\n");
   writeRepoFile(
     repoRoot,
@@ -122,6 +123,7 @@ test("publishes when the previous revision predates the tool manifest", () => {
   writeRepoFile(repoRoot, "fixtures/test-site/package-lock.json", "{\n}\n");
   writeRepoFile(repoRoot, "Dockerfile.slim", "FROM node:24-slim\n");
   writeRepoFile(repoRoot, "Dockerfile.alpine", "FROM node:24-alpine\n");
+  writeRepoFile(repoRoot, "docker-bake.hcl", "group \"default\" {\n  targets = [\"slim\"]\n}\n");
   writeRepoFile(repoRoot, "scripts/smoke-test-image.sh", "#!/bin/sh\nexit 0\n");
   writeRepoFile(
     repoRoot,
@@ -145,6 +147,7 @@ test("publishes when the previous revision predates the tool manifest", () => {
     ".github/workflows/publish.yml",
     "Dockerfile.alpine",
     "Dockerfile.slim",
+    "docker-bake.hcl",
     "fixtures/test-site/package-lock.json",
     "fixtures/test-site/package.json",
     "package-lock.json",
@@ -169,6 +172,28 @@ test("publishes when a Dockerfile changed without an Astro version bump", () => 
   assert.equal(result.shouldPublish, true);
   assert.equal(result.reason, "recipe-changed");
   assert.deepEqual(result.changedInputs, ["Dockerfile.slim"]);
+});
+
+test("publishes when the bake definition changed without an Astro version bump", () => {
+  const { baseRef, repoRoot } = createRepo();
+
+  writeRepoFile(
+    repoRoot,
+    "docker-bake.hcl",
+    "group \"default\" {\n  targets = [\"slim\", \"alpine\"]\n}\n",
+  );
+  const headRef = commitAll(repoRoot, "adjust bake targets");
+
+  const result = decidePublish({
+    beforeRef: baseRef,
+    eventName: "push",
+    headRef,
+    repoRoot,
+  });
+
+  assert.equal(result.shouldPublish, true);
+  assert.equal(result.reason, "recipe-changed");
+  assert.deepEqual(result.changedInputs, ["docker-bake.hcl"]);
 });
 
 test("publishes when the smoke test recipe changed without an Astro version bump", () => {

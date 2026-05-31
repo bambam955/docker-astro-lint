@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildImageTags } from "../scripts/print-image-tags.mjs";
+import { buildImageTags, formatTags } from "../scripts/print-image-tags.mjs";
 
 test("builds unsuffixed default tags for the slim image family", () => {
   const tags = buildImageTags({
@@ -54,5 +54,29 @@ test("rejects versions that cannot produce major and minor rolling tags", () => 
         version: "6.4.2-beta.1",
       }),
     /Expected a stable Astro version in major\.minor\.patch form/,
+  );
+});
+
+test("formats tags as a bake-friendly CSV string", () => {
+  const tags = buildImageTags({
+    imageName: "ghcr.io/example/docker-astro-lint",
+    variant: "alpine",
+    version: "6.4.2",
+  });
+
+  assert.equal(
+    formatTags({ format: "csv", tags }),
+    "ghcr.io/example/docker-astro-lint:6.4.2-alpine,ghcr.io/example/docker-astro-lint:6.4-alpine,ghcr.io/example/docker-astro-lint:6-alpine,ghcr.io/example/docker-astro-lint:latest-alpine",
+  );
+});
+
+test("rejects unsupported output formats", () => {
+  assert.throws(
+    () =>
+      formatTags({
+        format: "json",
+        tags: ["ghcr.io/example/docker-astro-lint:6.4.2"],
+      }),
+    /Unsupported output format "json"\./,
   );
 });

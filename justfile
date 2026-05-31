@@ -8,7 +8,7 @@ default:
 
 # Build a local image for one of the supported Dockerfile variants.
 build variant="slim":
-  docker build -f "Dockerfile.{{variant}}" -t "{{image_name}}:{{astro_version}}-{{variant}}" .
+  ASTRO_VERSION="{{astro_version}}" IMAGE_NAME="{{image_name}}" docker buildx bake "{{variant}}" --load
 
 # Open an interactive shell in the local image with the repo mounted at /workspace.
 run variant="slim":
@@ -18,5 +18,5 @@ run variant="slim":
 smoke variant="slim":
   npm ci
   (cd fixtures/test-site && npm ci)
-  docker build -f "Dockerfile.{{variant}}" -t "{{image_name}}:{{astro_version}}-{{variant}}" .
+  ASTRO_VERSION="{{astro_version}}" IMAGE_NAME="{{image_name}}" docker buildx bake "{{variant}}" --load
   ./scripts/smoke-test-image.sh "{{image_name}}:{{astro_version}}-{{variant}}"
