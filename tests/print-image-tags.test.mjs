@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildImageTags, formatTags } from "../scripts/print-image-tags.mjs";
+import {
+  buildBakeOverride,
+  buildImageTags,
+  formatTags,
+} from "../scripts/print-image-tags.mjs";
 
 test("builds unsuffixed default tags for the slim image family", () => {
   const tags = buildImageTags({
@@ -78,5 +82,35 @@ test("rejects unsupported output formats", () => {
         tags: ["ghcr.io/example/docker-astro-lint:6.4.2"],
       }),
     /Unsupported output format "json"\./,
+  );
+});
+
+test("builds a bake override file for multi-tag publishes", () => {
+  const tags = buildImageTags({
+    imageName: "ghcr.io/example/docker-astro-lint",
+    variant: "slim",
+    version: "6.4.2",
+  });
+
+  assert.equal(
+    buildBakeOverride({ target: "slim", tags }),
+    JSON.stringify(
+      {
+        target: {
+          slim: {
+            tags,
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+});
+
+test("rejects bake overrides without a target name", () => {
+  assert.throws(
+    () => buildBakeOverride({ target: "", tags: ["ghcr.io/example/image:latest"] }),
+    /Missing required bake target name\./,
   );
 });

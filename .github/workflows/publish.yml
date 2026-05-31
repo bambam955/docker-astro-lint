@@ -89,14 +89,19 @@ jobs:
           ASTRO_VERSION: ${{ steps.astro.outputs.version }}
           IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/docker-astro-lint
         run: |
-          publish_tags="$(node ./scripts/print-image-tags.mjs \
-            --format csv \
+          publish_override="$(mktemp)"
+          trap 'rm -f "$publish_override"' EXIT
+          node ./scripts/print-image-tags.mjs \
+            --format bake \
             --image "$IMAGE_NAME" \
             --variant "${{ matrix.variant }}" \
-            --version "$ASTRO_VERSION")"
-          docker buildx bake "${{ matrix.variant }}" \
+            --version "$ASTRO_VERSION" \
+            --target "${{ matrix.variant }}" > "$publish_override"
+          docker buildx bake \
+            -f docker-bake.hcl \
+            -f "$publish_override" \
+            "${{ matrix.variant }}" \
             --push \
-            --set "${{ matrix.variant }}.tags=${publish_tags}"
 
       - name: Skip publish when Astro and recipe inputs did not change
         if: steps.publish_guard.outputs.should_publish != 'true'

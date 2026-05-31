@@ -55,6 +55,10 @@ function writeOutputs({ outputPath, tags }) {
 }
 
 export function formatTags({ format, tags }) {
+  if (format === "bake") {
+    throw new Error("The bake format requires a target name; call buildBakeOverride instead.");
+  }
+
   if (format === "csv") {
     // Bake accepts comma-delimited tag overrides, so keep that translation in
     // one place instead of rebuilding it inline in the workflow shell.
@@ -68,6 +72,26 @@ export function formatTags({ format, tags }) {
   throw new Error(`Unsupported output format "${format}".`);
 }
 
+export function buildBakeOverride({ target, tags }) {
+  if (!target) {
+    throw new Error("Missing required bake target name.");
+  }
+
+  // Bake merge files preserve list types, which lets the workflow inject a
+  // computed multi-tag release definition without flattening it into a string.
+  return JSON.stringify(
+    {
+      target: {
+        [target]: {
+          tags,
+        },
+      },
+    },
+    null,
+    2,
+  );
+}
+
 function main() {
   const { values } = parseArgs({
     args: process.argv.slice(2),
@@ -79,6 +103,9 @@ function main() {
         type: "string",
       },
       output: {
+        type: "string",
+      },
+      target: {
         type: "string",
       },
       variant: {
@@ -114,6 +141,14 @@ function main() {
   }
 
   const format = values.format ?? "lines";
+
+  if (format === "bake") {
+    process.stdout.write(
+      `${buildBakeOverride({ target: values.target, tags })}\n`,
+    );
+    return;
+  }
+
   process.stdout.write(`${formatTags({ format, tags })}\n`);
 }
 
