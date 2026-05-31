@@ -1,0 +1,72 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install pinned tool manifest
+        run: npm ci
+
+      - name: Run automated tests
+        run: npm test
+
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - slim
+          - alpine
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install pinned tool manifest
+        run: npm ci
+
+      - name: Install fixture dependencies
+        working-directory: fixtures/test-site
+        run: npm ci
+
+      - name: Read pinned Astro version
+        id: astro
+        run: echo "version=$(node ./scripts/print-astro-version.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build validation image
+        env:
+          ASTRO_VERSION: ${{ steps.astro.outputs.version }}
+        run: |
+          # Load the image into the Docker engine so the smoke test can execute
+          # the same bake target definition that publish uses later on main.
+          docker buildx bake "${{ matrix.variant }}" --load
+
+      - name: Smoke test image
+        run: ./scripts/smoke-test-image.sh "docker-astro-lint:${{ steps.astro.outputs.version }}-${{ matrix.variant }}"
