@@ -101,7 +101,7 @@ jobs:
             -f docker-bake.hcl \
             -f "$publish_override" \
             "${{ matrix.variant }}" \
-            --push \
+            --push
 
       - name: Skip publish when Astro and recipe inputs did not change
         if: steps.publish_guard.outputs.should_publish != 'true'
