@@ -28,6 +28,9 @@ The image ships pinned versions of:
 - `eslint`
 - `prettier`
 - `prettier-astro` convenience wrapper
+- `vitest`
+- `playwright`
+- `linkinator`
 - `markdownlint-cli2`
 - `lychee`
 

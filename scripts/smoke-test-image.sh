@@ -28,7 +28,10 @@ docker run --rm "${image_ref}" astro --version
 docker run --rm "${image_ref}" eslint --version
 docker run --rm "${image_ref}" prettier --version
 docker run --rm "${image_ref}" prettier-astro --version
+docker run --rm "${image_ref}" linkinator --version
 docker run --rm "${image_ref}" markdownlint-cli2 --version
+docker run --rm "${image_ref}" playwright --version
+docker run --rm "${image_ref}" vitest --version
 docker run --rm "${image_ref}" lychee --version
 
 # The fixture keeps its own dependencies outside the image because the image is

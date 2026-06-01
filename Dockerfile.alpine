@@ -5,6 +5,9 @@ ARG LYCHEE_VERSION=0.24.2
 ENV TOOL_HOME=/opt/docker-astro-lint
 ENV PATH="${TOOL_HOME}/node_modules/.bin:${PATH}"
 ENV ASTRO_TELEMETRY_DISABLED=1
+# Keep the Playwright CLI available without downloading browser bundles into
+# the image during npm install.
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 RUN apk add --no-cache ca-certificates curl tar
 
