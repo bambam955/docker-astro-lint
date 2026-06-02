@@ -2,14 +2,14 @@
 
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-  echo "usage: $0 <image-ref>" >&2
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "usage: $0 <image-ref> [fixture-dir]" >&2
   exit 1
 fi
 
 image_ref="$1"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-fixture_dir="${repo_root}/fixtures/test-site"
+fixture_dir="${2:-${repo_root}/fixtures/test-site}"
 runtime_user="$(id -u):$(id -g)"
 
 if [[ ! -d "${fixture_dir}/node_modules" ]]; then

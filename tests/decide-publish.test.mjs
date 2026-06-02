@@ -25,17 +25,23 @@ function writeRepoFile(repoRoot, relativePath, content) {
   writeFileSync(absolutePath, content);
 }
 
-function updatePinnedAstroVersion(repoRoot, version) {
-  writeJson(path.join(repoRoot, "package.json"), {
+function writeAstroVersions(repoRoot, versions) {
+  writeJson(path.join(repoRoot, "astro-versions.json"), {
+    versions,
+  });
+}
+
+function writeTrackedManifestPair(repoRoot, manifestRoot, version) {
+  writeJson(path.join(repoRoot, manifestRoot, version, "package.json"), {
     dependencies: {
       astro: version,
     },
   });
-  writeJson(path.join(repoRoot, "fixtures/test-site/package.json"), {
-    dependencies: {
-      astro: version,
-    },
-  });
+  writeRepoFile(
+    repoRoot,
+    path.join(manifestRoot, version, "package-lock.json"),
+    "{\n}\n",
+  );
 }
 
 function commitAll(repoRoot, message) {
@@ -51,9 +57,9 @@ function createRepo() {
   runGit(repoRoot, ["config", "user.name", "Codex"]);
   runGit(repoRoot, ["config", "user.email", "codex@example.com"]);
 
-  updatePinnedAstroVersion(repoRoot, "1.0.0");
-  writeRepoFile(repoRoot, "package-lock.json", "{\n}\n");
-  writeRepoFile(repoRoot, "fixtures/test-site/package-lock.json", "{\n}\n");
+  writeAstroVersions(repoRoot, ["1.0.0"]);
+  writeTrackedManifestPair(repoRoot, "manifests/tools", "1.0.0");
+  writeTrackedManifestPair(repoRoot, "manifests/fixtures", "1.0.0");
   writeRepoFile(repoRoot, "Dockerfile.slim", "FROM node:24-slim\n");
   writeRepoFile(repoRoot, "Dockerfile.alpine", "FROM node:24-alpine\n");
   writeRepoFile(repoRoot, "docker-bake.hcl", "group \"default\" {\n  targets = [\"slim\"]\n}\n");
@@ -93,11 +99,11 @@ test("publishes when a manual dispatch requests it", () => {
   assert.equal(result.reason, "manual-dispatch");
 });
 
-test("publishes when the Astro version changed in any commit in the push", () => {
+test("publishes when the configured Astro version set changed in any commit in the push", () => {
   const { baseRef, repoRoot } = createRepo();
 
-  updatePinnedAstroVersion(repoRoot, "2.0.0");
-  commitAll(repoRoot, "bump astro");
+  writeAstroVersions(repoRoot, ["2.0.0", "1.0.0"]);
+  commitAll(repoRoot, "expand astro support");
 
   writeRepoFile(repoRoot, "README.md", "# unrelated follow-up\n");
   const headRef = commitAll(repoRoot, "touch docs");
@@ -110,17 +116,17 @@ test("publishes when the Astro version changed in any commit in the push", () =>
   });
 
   assert.equal(result.shouldPublish, true);
-  assert.equal(result.reason, "astro-version-changed");
-  assert.equal(result.previousVersion, "1.0.0");
-  assert.equal(result.currentVersion, "2.0.0");
+  assert.equal(result.reason, "astro-versions-changed");
+  assert.deepEqual(result.previousVersions, ["1.0.0"]);
+  assert.deepEqual(result.currentVersions, ["2.0.0", "1.0.0"]);
 });
 
-test("publishes when the previous revision predates the tool manifest", () => {
+test("publishes when the previous revision predates the managed version set", () => {
   const { baseRef, repoRoot } = createEmptyRepo();
 
-  updatePinnedAstroVersion(repoRoot, "1.0.0");
-  writeRepoFile(repoRoot, "package-lock.json", "{\n}\n");
-  writeRepoFile(repoRoot, "fixtures/test-site/package-lock.json", "{\n}\n");
+  writeAstroVersions(repoRoot, ["1.0.0"]);
+  writeTrackedManifestPair(repoRoot, "manifests/tools", "1.0.0");
+  writeTrackedManifestPair(repoRoot, "manifests/fixtures", "1.0.0");
   writeRepoFile(repoRoot, "Dockerfile.slim", "FROM node:24-slim\n");
   writeRepoFile(repoRoot, "Dockerfile.alpine", "FROM node:24-alpine\n");
   writeRepoFile(repoRoot, "docker-bake.hcl", "group \"default\" {\n  targets = [\"slim\"]\n}\n");
@@ -141,17 +147,17 @@ test("publishes when the previous revision predates the tool manifest", () => {
 
   assert.equal(result.shouldPublish, true);
   assert.equal(result.reason, "recipe-changed");
-  assert.equal(result.currentVersion, "1.0.0");
-  assert.equal(result.previousVersion, null);
+  assert.deepEqual(result.currentVersions, ["1.0.0"]);
+  assert.equal(result.previousVersions, null);
   assert.deepEqual(result.changedInputs, [
     ".github/workflows/publish.yml",
     "Dockerfile.alpine",
     "Dockerfile.slim",
     "docker-bake.hcl",
-    "fixtures/test-site/package-lock.json",
-    "fixtures/test-site/package.json",
-    "package-lock.json",
-    "package.json",
+    "manifests/fixtures/1.0.0/package-lock.json",
+    "manifests/fixtures/1.0.0/package.json",
+    "manifests/tools/1.0.0/package-lock.json",
+    "manifests/tools/1.0.0/package.json",
     "scripts/smoke-test-image.sh",
   ]);
 });
@@ -172,6 +178,28 @@ test("publishes when a Dockerfile changed without an Astro version bump", () => 
   assert.equal(result.shouldPublish, true);
   assert.equal(result.reason, "recipe-changed");
   assert.deepEqual(result.changedInputs, ["Dockerfile.slim"]);
+});
+
+test("publishes when the tracked manifest directories changed without a version-set bump", () => {
+  const { baseRef, repoRoot } = createRepo();
+
+  writeRepoFile(
+    repoRoot,
+    "manifests/tools/1.0.0/package-lock.json",
+    "{\n  \"updated\": true\n}\n",
+  );
+  const headRef = commitAll(repoRoot, "refresh tracked manifest");
+
+  const result = decidePublish({
+    beforeRef: baseRef,
+    eventName: "push",
+    headRef,
+    repoRoot,
+  });
+
+  assert.equal(result.shouldPublish, true);
+  assert.equal(result.reason, "recipe-changed");
+  assert.deepEqual(result.changedInputs, ["manifests/tools/1.0.0/package-lock.json"]);
 });
 
 test("publishes when the bake definition changed without an Astro version bump", () => {
@@ -236,7 +264,7 @@ test("publishes when the workflow build inputs changed without an Astro version 
   assert.deepEqual(result.changedInputs, [".github/workflows/publish.yml"]);
 });
 
-test("skips publish when neither Astro nor publish inputs changed", () => {
+test("skips publish when neither the Astro version set nor publish inputs changed", () => {
   const { baseRef, repoRoot } = createRepo();
 
   writeRepoFile(repoRoot, "README.md", "# docs only\n");

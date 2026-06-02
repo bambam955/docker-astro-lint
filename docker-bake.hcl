@@ -18,6 +18,11 @@ variable "LYCHEE_VERSION" {
 
 target "_common" {
   context = "."
+  // BuildKit named contexts let each image build consume the tracked manifest
+  // pair for the selected Astro version without rewriting repo files.
+  contexts = {
+    tool_manifest = "./manifests/tools/${ASTRO_VERSION}"
+  }
   args = {
     LYCHEE_VERSION = LYCHEE_VERSION
   }

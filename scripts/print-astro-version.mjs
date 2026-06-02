@@ -1,11 +1,3 @@
-import { readFileSync } from "node:fs";
+import { getPrimaryAstroVersion, readAstroVersions } from "./astro-versions.mjs";
 
-const packageJsonPath = new URL("../package.json", import.meta.url);
-const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
-const astroVersion = packageJson.dependencies?.astro;
-
-if (!astroVersion) {
-  throw new Error("The root package.json is missing a pinned astro dependency.");
-}
-
-process.stdout.write(astroVersion);
+process.stdout.write(getPrimaryAstroVersion(readAstroVersions()));

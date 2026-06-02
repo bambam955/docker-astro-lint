@@ -3,15 +3,15 @@ import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
+import { validateAstroVersions } from "./astro-versions.mjs";
+
 export const publishInputPaths = [
   ".github/workflows/publish.yml",
   "Dockerfile.alpine",
   "Dockerfile.slim",
   "docker-bake.hcl",
-  "fixtures/test-site/package-lock.json",
-  "fixtures/test-site/package.json",
-  "package-lock.json",
-  "package.json",
+  "manifests/fixtures",
+  "manifests/tools",
   "scripts/smoke-test-image.sh",
 ];
 
@@ -50,26 +50,25 @@ function hasFileAtRevision({ repoRoot, revision, filePath }) {
   }) !== null;
 }
 
-function readPinnedAstroVersion({ repoRoot, revision, allowMissing = false }) {
-  // Older revisions can predate the tool manifest entirely. Treat that as
-  // "no previous pinned version" so the caller can fall back to path diffs.
+function readAstroVersionsAtRevision({ repoRoot, revision, allowMissing = false }) {
+  // Older revisions can predate the managed version set entirely. Treat that
+  // as "no previous version set" so the caller can fall back to path diffs.
   if (
     allowMissing &&
-    !hasFileAtRevision({ filePath: "package.json", repoRoot, revision })
+    !hasFileAtRevision({ filePath: "astro-versions.json", repoRoot, revision })
   ) {
     return null;
   }
 
-  const packageJson = JSON.parse(
-    runGit(["show", `${revision}:package.json`], { repoRoot }),
+  const versionConfig = JSON.parse(
+    runGit(["show", `${revision}:astro-versions.json`], { repoRoot }),
   );
-  const astroVersion = packageJson.dependencies?.astro;
 
-  if (!astroVersion) {
-    throw new Error(`The package.json at ${revision} is missing a pinned astro dependency.`);
+  if (!versionConfig || typeof versionConfig !== "object" || !("versions" in versionConfig)) {
+    throw new Error(`The astro-versions.json at ${revision} is missing a versions array.`);
   }
 
-  return astroVersion;
+  return validateAstroVersions(versionConfig.versions);
 }
 
 function listChangedPublishInputs({ repoRoot, beforeRef, headRef }) {
@@ -94,8 +93,8 @@ export function decidePublish({
   if (eventName === "workflow_dispatch") {
     return {
       changedInputs: [],
-      currentVersion: null,
-      previousVersion: null,
+      currentVersions: null,
+      previousVersions: null,
       reason: "manual-dispatch",
       shouldPublish: true,
     };
@@ -105,26 +104,29 @@ export function decidePublish({
   if (isMissingRevision(beforeRef) || !hasCommit({ repoRoot, revision: beforeRef })) {
     return {
       changedInputs: [],
-      currentVersion: null,
-      previousVersion: null,
+      currentVersions: null,
+      previousVersions: null,
       reason: "missing-before-revision",
       shouldPublish: true,
     };
   }
 
-  const currentVersion = readPinnedAstroVersion({ repoRoot, revision: headRef });
-  const previousVersion = readPinnedAstroVersion({
+  const currentVersions = readAstroVersionsAtRevision({ repoRoot, revision: headRef });
+  const previousVersions = readAstroVersionsAtRevision({
     allowMissing: true,
     repoRoot,
     revision: beforeRef,
   });
 
-  if (previousVersion && currentVersion !== previousVersion) {
+  if (
+    previousVersions &&
+    JSON.stringify(currentVersions) !== JSON.stringify(previousVersions)
+  ) {
     return {
       changedInputs: [],
-      currentVersion,
-      previousVersion,
-      reason: "astro-version-changed",
+      currentVersions,
+      previousVersions,
+      reason: "astro-versions-changed",
       shouldPublish: true,
     };
   }
@@ -134,8 +136,8 @@ export function decidePublish({
   if (changedInputs.length > 0) {
     return {
       changedInputs,
-      currentVersion,
-      previousVersion,
+      currentVersions,
+      previousVersions,
       reason: "recipe-changed",
       shouldPublish: true,
     };
@@ -143,8 +145,8 @@ export function decidePublish({
 
   return {
     changedInputs: [],
-    currentVersion,
-    previousVersion,
+    currentVersions,
+    previousVersions,
     reason: "no-publish-input-change",
     shouldPublish: false,
   };
@@ -165,12 +167,12 @@ function writeOutputs({ outputPath, result }) {
     lines.push("changed_inputs=");
   }
 
-  if (result.currentVersion) {
-    lines.push(`current_version=${result.currentVersion}`);
+  if (result.currentVersions) {
+    lines.push(`current_versions=${JSON.stringify(result.currentVersions)}`);
   }
 
-  if (result.previousVersion) {
-    lines.push(`previous_version=${result.previousVersion}`);
+  if (result.previousVersions) {
+    lines.push(`previous_versions=${JSON.stringify(result.previousVersions)}`);
   }
 
   appendFileSync(outputPath, `${lines.join("\n")}\n`);

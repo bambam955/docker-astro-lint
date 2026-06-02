@@ -25,25 +25,16 @@ jobs:
       - name: Update pinned Astro version
         run: node ./scripts/update-astro-version.mjs
 
-      - name: Detect manifest changes
+      - name: Detect version-set changes
         id: changes
         run: |
-          if git diff --quiet -- package.json fixtures/test-site/package.json; then
+          if git diff --quiet -- astro-versions.json package.json package-lock.json fixtures/test-site/package.json fixtures/test-site/package-lock.json manifests; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Refresh root lockfile
-        if: steps.changes.outputs.changed == 'true'
-        run: npm install --package-lock-only
-
-      - name: Refresh fixture lockfile
-        if: steps.changes.outputs.changed == 'true'
-        working-directory: fixtures/test-site
-        run: npm install --package-lock-only
-
-      - name: Read pinned Astro version
+      - name: Read primary Astro version
         if: steps.changes.outputs.changed == 'true'
         id: astro
         run: echo "version=$(node ./scripts/print-astro-version.mjs)" >> "$GITHUB_OUTPUT"
@@ -53,11 +44,11 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           branch: chore/update-astro
-          commit-message: "chore: update Astro to v${{ steps.astro.outputs.version }}"
-          title: "chore: update Astro to v${{ steps.astro.outputs.version }}"
+          commit-message: "chore: refresh Astro support set"
+          title: "chore: refresh Astro support set"
           body: |
             ## Summary
 
-            - bump the pinned Astro version in the image tool manifest
-            - refresh the fixture project to match the new Astro version
-            - regenerate the lockfiles used by the image build and smoke tests
+            - refresh each configured Astro minor line to its latest stable patch release
+            - update the primary local default to v${{ steps.astro.outputs.version }} when it changes
+            - regenerate the tracked tool and fixture manifests used by image builds and smoke tests

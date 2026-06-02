@@ -15,7 +15,7 @@ RUN apt-get update \
 
 WORKDIR ${TOOL_HOME}
 
-COPY package.json package-lock.json ./
+COPY --from=tool_manifest package.json package-lock.json ./
 
 # Keep the JavaScript tools in a dedicated directory so the runtime image can
 # expose them without depending on the mounted project layout.
