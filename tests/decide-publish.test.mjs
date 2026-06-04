@@ -63,6 +63,11 @@ function createRepo() {
   writeRepoFile(repoRoot, "Dockerfile.slim", "FROM node:24-slim\n");
   writeRepoFile(repoRoot, "Dockerfile.alpine", "FROM node:24-alpine\n");
   writeRepoFile(repoRoot, "docker-bake.hcl", "group \"default\" {\n  targets = [\"slim\"]\n}\n");
+  writeRepoFile(repoRoot, "scripts/astro-versions.mjs", "export function validateAstroVersions() {}\n");
+  writeRepoFile(repoRoot, "scripts/decide-publish.mjs", "export function decidePublish() {}\n");
+  writeRepoFile(repoRoot, "scripts/prepare-smoke-fixture.mjs", "console.log(\"fixture\");\n");
+  writeRepoFile(repoRoot, "scripts/print-astro-versions.mjs", "console.log(\"[]\");\n");
+  writeRepoFile(repoRoot, "scripts/print-image-tags.mjs", "console.log(\"tags\");\n");
   writeRepoFile(repoRoot, "scripts/smoke-test-image.sh", "#!/bin/sh\nexit 0\n");
   writeRepoFile(
     repoRoot,
@@ -130,6 +135,11 @@ test("publishes when the previous revision predates the managed version set", ()
   writeRepoFile(repoRoot, "Dockerfile.slim", "FROM node:24-slim\n");
   writeRepoFile(repoRoot, "Dockerfile.alpine", "FROM node:24-alpine\n");
   writeRepoFile(repoRoot, "docker-bake.hcl", "group \"default\" {\n  targets = [\"slim\"]\n}\n");
+  writeRepoFile(repoRoot, "scripts/astro-versions.mjs", "export function validateAstroVersions() {}\n");
+  writeRepoFile(repoRoot, "scripts/decide-publish.mjs", "export function decidePublish() {}\n");
+  writeRepoFile(repoRoot, "scripts/prepare-smoke-fixture.mjs", "console.log(\"fixture\");\n");
+  writeRepoFile(repoRoot, "scripts/print-astro-versions.mjs", "console.log(\"[]\");\n");
+  writeRepoFile(repoRoot, "scripts/print-image-tags.mjs", "console.log(\"tags\");\n");
   writeRepoFile(repoRoot, "scripts/smoke-test-image.sh", "#!/bin/sh\nexit 0\n");
   writeRepoFile(
     repoRoot,
@@ -158,6 +168,11 @@ test("publishes when the previous revision predates the managed version set", ()
     "manifests/fixtures/1.0.0/package.json",
     "manifests/tools/1.0.0/package-lock.json",
     "manifests/tools/1.0.0/package.json",
+    "scripts/astro-versions.mjs",
+    "scripts/decide-publish.mjs",
+    "scripts/prepare-smoke-fixture.mjs",
+    "scripts/print-astro-versions.mjs",
+    "scripts/print-image-tags.mjs",
     "scripts/smoke-test-image.sh",
   ]);
 });
@@ -262,6 +277,68 @@ test("publishes when the workflow build inputs changed without an Astro version 
   assert.equal(result.shouldPublish, true);
   assert.equal(result.reason, "recipe-changed");
   assert.deepEqual(result.changedInputs, [".github/workflows/publish.yml"]);
+});
+
+test("publishes when a tag generation script changed without an Astro version bump", () => {
+  const { baseRef, repoRoot } = createRepo();
+
+  writeRepoFile(repoRoot, "scripts/print-image-tags.mjs", "console.log(\"updated tags\");\n");
+  const headRef = commitAll(repoRoot, "adjust image tag generation");
+
+  const result = decidePublish({
+    beforeRef: baseRef,
+    eventName: "push",
+    headRef,
+    repoRoot,
+  });
+
+  assert.equal(result.shouldPublish, true);
+  assert.equal(result.reason, "recipe-changed");
+  assert.deepEqual(result.changedInputs, ["scripts/print-image-tags.mjs"]);
+});
+
+test("publishes when the shared Astro helper changed without an Astro version bump", () => {
+  const { baseRef, repoRoot } = createRepo();
+
+  writeRepoFile(
+    repoRoot,
+    "scripts/astro-versions.mjs",
+    "export function validateAstroVersions() {\n  return [];\n}\n",
+  );
+  const headRef = commitAll(repoRoot, "adjust Astro helper");
+
+  const result = decidePublish({
+    beforeRef: baseRef,
+    eventName: "push",
+    headRef,
+    repoRoot,
+  });
+
+  assert.equal(result.shouldPublish, true);
+  assert.equal(result.reason, "recipe-changed");
+  assert.deepEqual(result.changedInputs, ["scripts/astro-versions.mjs"]);
+});
+
+test("publishes when the smoke fixture preparation script changed without an Astro version bump", () => {
+  const { baseRef, repoRoot } = createRepo();
+
+  writeRepoFile(
+    repoRoot,
+    "scripts/prepare-smoke-fixture.mjs",
+    "console.log(\"updated fixture\");\n",
+  );
+  const headRef = commitAll(repoRoot, "adjust smoke fixture prep");
+
+  const result = decidePublish({
+    beforeRef: baseRef,
+    eventName: "push",
+    headRef,
+    repoRoot,
+  });
+
+  assert.equal(result.shouldPublish, true);
+  assert.equal(result.reason, "recipe-changed");
+  assert.deepEqual(result.changedInputs, ["scripts/prepare-smoke-fixture.mjs"]);
 });
 
 test("skips publish when neither the Astro version set nor publish inputs changed", () => {

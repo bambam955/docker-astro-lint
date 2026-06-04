@@ -12,6 +12,13 @@ export const publishInputPaths = [
   "docker-bake.hcl",
   "manifests/fixtures",
   "manifests/tools",
+  // Keep publish script changes from going stale on main. These scripts shape
+  // the release matrix, fixture setup, tag generation, and publish decision.
+  "scripts/astro-versions.mjs",
+  "scripts/decide-publish.mjs",
+  "scripts/prepare-smoke-fixture.mjs",
+  "scripts/print-astro-versions.mjs",
+  "scripts/print-image-tags.mjs",
   "scripts/smoke-test-image.sh",
 ];
 
